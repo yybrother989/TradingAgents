@@ -114,14 +114,20 @@ pip install -r requirements.txt
 
 ### Required APIs
 
-You will also need the FinnHub API for financial data. All of our code is implemented with the free tier.
+You will also need the [Alpha Vantage API](https://www.alphavantage.co/support/#api-key) for financial data. The free tier supports 25 API calls per day.
 ```bash
-export FINNHUB_API_KEY=$YOUR_FINNHUB_API_KEY
+export ALPHA_VANTAGE_API_KEY=$YOUR_ALPHA_VANTAGE_API_KEY
 ```
 
 You will need the OpenAI API for all the agents.
 ```bash
 export OPENAI_API_KEY=$YOUR_OPENAI_API_KEY
+```
+
+Alternatively, you can create a `.env` file in the project root with your API keys (see `.env.example` for reference):
+```bash
+cp .env.example .env
+# Edit .env with your actual API keys
 ```
 
 ### CLI Usage
@@ -178,7 +184,14 @@ config = DEFAULT_CONFIG.copy()
 config["deep_think_llm"] = "gpt-4.1-nano"  # Use a different model
 config["quick_think_llm"] = "gpt-4.1-nano"  # Use a different model
 config["max_debate_rounds"] = 1  # Increase debate rounds
-config["online_tools"] = True # Use online tools or cached data
+
+# Configure data vendors (default uses Alpha Vantage for real-time data)
+config["data_vendors"] = {
+    "core_stock_apis": "alpha_vantage",      # Options: alpha_vantage, yahoo_finance, local
+    "technical_indicators": "alpha_vantage", # Options: alpha_vantage, yahoo_finance, local
+    "fundamental_data": "alpha_vantage",     # Options: alpha_vantage, openai, local
+    "news_data": "alpha_vantage",            # Options: alpha_vantage, openai, google, local
+}
 
 # Initialize with custom config
 ta = TradingAgentsGraph(debug=True, config=config)
@@ -188,7 +201,7 @@ _, decision = ta.propagate("NVDA", "2024-05-10")
 print(decision)
 ```
 
-> For `online_tools`, we recommend enabling them for experimentation, as they provide access to real-time data. The agents' offline tools rely on cached data from our **Tauric TradingDB**, a curated dataset we use for backtesting. We're currently in the process of refining this dataset, and we plan to release it soon alongside our upcoming projects. Stay tuned!
+> The default configuration now uses Alpha Vantage as the primary data provider, which provides access to real-time market data. For offline experimentation, there's a local data vendor option that uses our **Tauric TradingDB**, a curated dataset for backtesting, though this is still in development. We're currently refining this dataset and plan to release it soon alongside our upcoming projects. Stay tuned!
 
 You can view the full list of configurations in `tradingagents/default_config.py`.
 
