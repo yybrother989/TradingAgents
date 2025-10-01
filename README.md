@@ -203,6 +203,30 @@ print(decision)
 
 > The default configuration now uses Alpha Vantage as the primary data provider, which provides access to real-time market data. For offline experimentation, there's a local data vendor option that uses our **Tauric TradingDB**, a curated dataset for backtesting, though this is still in development. We're currently refining this dataset and plan to release it soon alongside our upcoming projects. Stay tuned!
 
+### Alpha Vantage MCP Integration
+
+TradingAgents now features **Model Context Protocol (MCP)** integration with Alpha Vantage, providing enhanced real-time data access and improved reliability. The MCP integration offers:
+
+- **Real-time data streaming** via HTTP/SSE connections
+- **Enhanced error handling** and connection management
+- **Better performance** with optimized data retrieval
+- **Seamless integration** with existing agent workflows
+- **Dynamic tool discovery** for flexible data access
+
+#### Setup MCP Integration
+
+1. **Install dependencies** (already included in requirements):
+   ```bash
+   pip install mcp>=1.9.4
+   ```
+
+2. **Configure Alpha Vantage API key**:
+   ```bash
+   python setup_mcp.py
+   ```
+
+The MCP integration is automatically enabled as the default data provider. The Market Analyst now uses MCP tools for real-time data retrieval, providing more accurate and up-to-date market analysis.
+
 You can view the full list of configurations in `tradingagents/default_config.py`.
 
 ## Contributing

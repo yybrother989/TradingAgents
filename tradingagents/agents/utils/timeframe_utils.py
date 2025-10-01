@@ -81,3 +81,4 @@ This means:
     
     enhanced_prompt = original_prompt + timeframe_context
     return enhanced_prompt
+

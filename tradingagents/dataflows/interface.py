@@ -15,6 +15,12 @@ from .alpha_vantage import (
     get_insider_transactions as get_alpha_vantage_insider_transactions,
     get_news as get_alpha_vantage_news
 )
+from .alpha_vantage_mcp import (
+    get_stock_data_mcp_sync as get_alpha_vantage_mcp_stock,
+    get_indicators_mcp_sync as get_alpha_vantage_mcp_indicators,
+    get_fundamentals_mcp_sync as get_alpha_vantage_mcp_fundamentals,
+    get_news_mcp_sync as get_alpha_vantage_mcp_news
+)
 
 # Configuration and routing logic
 from .config import get_config
@@ -57,7 +63,8 @@ VENDOR_LIST = [
     "local",
     "yahoo_finance",
     "openai",
-    "google"
+    "google",
+    "alpha_vantage_mcp"
 ]
 
 # Mapping of methods to their vendor-specific implementations
@@ -65,18 +72,21 @@ VENDOR_METHODS = {
     # core_stock_apis
     "get_stock_data": {
         "alpha_vantage": get_alpha_vantage_stock,
+        "alpha_vantage_mcp": get_alpha_vantage_mcp_stock,
         "yahoo_finance": get_YFin_data_online,
         "local": get_YFin_data,
     },
     # technical_indicators
     "get_indicators": {
         "alpha_vantage": get_alpha_vantage_indicator,
+        "alpha_vantage_mcp": get_alpha_vantage_mcp_indicators,
         "yahoo_finance": get_stock_stats_indicators_window,
         "local": get_stock_stats_indicators_window
     },
     # fundamental_data
     "get_fundamentals": {
         "alpha_vantage": get_alpha_vantage_fundamentals,
+        "alpha_vantage_mcp": get_alpha_vantage_mcp_fundamentals,
         "openai": get_fundamentals_openai,
     },
     "get_balance_sheet": {
@@ -94,6 +104,7 @@ VENDOR_METHODS = {
     # news_data
     "get_news": {
         "alpha_vantage": get_alpha_vantage_news,
+        "alpha_vantage_mcp": get_alpha_vantage_mcp_news,
         "openai": get_stock_news_openai,
         "google": get_google_news,
         "local": [get_finnhub_news, get_reddit_company_news, get_google_news],

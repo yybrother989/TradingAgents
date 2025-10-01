@@ -20,10 +20,10 @@ DEFAULT_CONFIG = {
     # Data vendor configuration
     # Category-level configuration (default for all tools in category)
     "data_vendors": {
-        "core_stock_apis": "alpha_vantage",            # OHLCV data: alpha_vantage, yahoo_finance, local
-        "technical_indicators": "alpha_vantage",       # Technical indicators: alpha_vantage, yahoo_finance, local
-        "fundamental_data": "alpha_vantage",           # Fundamentals: alpha_vantage, openai, local
-        "news_data": "alpha_vantage",                  # News: alpha_vantage, openai, google, local
+        "core_stock_apis": "alpha_vantage_mcp",        # OHLCV data: alpha_vantage, alpha_vantage_mcp, yahoo_finance, local
+        "technical_indicators": "alpha_vantage_mcp",   # Technical indicators: alpha_vantage, alpha_vantage_mcp, yahoo_finance, local
+        "fundamental_data": "alpha_vantage_mcp",       # Fundamentals: alpha_vantage, alpha_vantage_mcp, openai, local
+        "news_data": "alpha_vantage_mcp",              # News: alpha_vantage, alpha_vantage_mcp, openai, google, local
     },
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {
