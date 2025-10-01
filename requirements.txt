@@ -24,3 +24,6 @@ rich
 questionary
 langchain_anthropic
 langchain-google-genai
+# OpenAI Agents SDK for MCP integration
+agents>=0.1.0
+mcp>=1.9.4
