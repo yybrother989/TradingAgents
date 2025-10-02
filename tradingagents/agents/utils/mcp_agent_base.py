@@ -26,11 +26,39 @@ class MCPAgent:
         if self._initialized:
             return
         
-        await self.mcp_manager.ensure_initialized()
+        try:
+            await self.mcp_manager.ensure_initialized()
+        except Exception as e:
+            print(f"Warning: Failed to initialize MCP manager: {e}")
+            # Continue with mock MCP session
+        except BaseException as e:
+            print(f"Warning: MCP manager initialization failed: {e}")
+            # Continue with mock MCP session
         
         # Discover tools from all configured MCP servers
         for server_name in self.mcp_servers:
             try:
+                # Try real MCP server first
+                if server_name == "alphavantage":
+                    from tradingagents.dataflows.alpha_vantage_mcp_client import AlphaVantageMCPClient
+                    import os
+                    
+                    api_key = os.getenv('ALPHA_VANTAGE_API_KEY', 'TQS06EXKTHWU639G')
+                    async with AlphaVantageMCPClient(api_key) as client:
+                        tools_result = await client.list_tools()
+                        if tools_result:
+                            for tool in tools_result:
+                                tool_key = f"{server_name}_{tool['name']}"
+                                self._available_tools[tool_key] = {
+                                    'name': tool['name'],
+                                    'description': tool['description'],
+                                    'inputSchema': tool['inputSchema'],
+                                    'server': server_name
+                                }
+                            print(f"✅ Connected to real Alpha Vantage MCP server - {len(tools_result)} tools available")
+                            continue
+                
+                # Fallback to mock MCP session
                 session = self.mcp_manager.get_session(server_name)
                 if session:
                     tools_result = await session.list_tools()
@@ -57,6 +85,7 @@ class MCPAgent:
                             }
             except Exception as e:
                 print(f"Warning: Failed to discover tools from {server_name}: {e}")
+                # Continue with other servers
         
         self._initialized = True
     
@@ -79,33 +108,112 @@ class MCPAgent:
         
         return "\n".join(descriptions)
     
+    def _map_alpha_vantage_parameters(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Map parameters for Alpha Vantage MCP tools."""
+        # Default parameters for technical indicators
+        if tool_name in ['SMA', 'EMA', 'RSI', 'MACD', 'BBANDS', 'ATR']:
+            mapped = {
+                'symbol': arguments.get('symbol', 'AAPL'),
+                'interval': 'daily'
+            }
+            
+            # Add specific parameters for each tool
+            if tool_name in ['SMA', 'EMA', 'RSI']:
+                mapped.update({
+                    'series_type': 'close',
+                    'time_period': arguments.get('time_period', 20)
+                })
+            elif tool_name == 'ATR':
+                # ATR doesn't need series_type, only symbol, interval, and time_period
+                mapped['time_period'] = arguments.get('time_period', 14)
+            elif tool_name == 'MACD':
+                # MACD has different default parameters
+                mapped.update({
+                    'series_type': 'close',
+                    'fastperiod': 12,
+                    'slowperiod': 26,
+                    'signalperiod': 9
+                })
+            elif tool_name == 'BBANDS':
+                mapped.update({
+                    'series_type': 'close',
+                    'time_period': arguments.get('time_period', 20),
+                    'nbdevup': 2,
+                    'nbdevdn': 2
+                })
+            
+            return mapped
+        
+        # For TIME_SERIES_DAILY, use the original arguments
+        elif tool_name == 'TIME_SERIES_DAILY':
+            return {
+                'symbol': arguments.get('symbol', 'AAPL'),
+                'outputsize': arguments.get('outputsize', 'compact')
+            }
+        
+        # For other tools, return original arguments
+        return arguments
+    
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any] = None) -> str:
         """Call an MCP tool and return formatted result."""
+        # Map mock tool names to real MCP tool names
+        tool_name_mapping = {
+            'get_time_series_daily': 'TIME_SERIES_DAILY',
+            'get_sma': 'SMA',
+            'get_rsi': 'RSI',
+            'get_macd': 'MACD',
+            'get_bbands': 'BBANDS',
+            'get_atr': 'ATR'
+        }
+        
+        # Use mapped name if available
+        real_tool_name = tool_name_mapping.get(tool_name, tool_name)
+        
         # Find the tool in available tools
         tool_info = None
         for tool_key, info in self._available_tools.items():
-            if info['name'] == tool_name:
+            if info['name'] == real_tool_name:
                 tool_info = info
                 break
         
         if not tool_info:
-            return f"Error: Tool '{tool_name}' not found in available tools."
+            return f"Error: Tool '{real_tool_name}' not found in available tools."
         
         try:
-            result = await self.mcp_manager.call_tool(
-                tool_info['server'], 
-                tool_name, 
-                arguments or {}
-            )
+            # Use custom Alpha Vantage MCP client for real server
+            if tool_info['server'] == "alphavantage":
+                from tradingagents.dataflows.alpha_vantage_mcp_client import AlphaVantageMCPClient
+                import os
+                
+                # Map parameters for Alpha Vantage tools
+                mapped_arguments = self._map_alpha_vantage_parameters(real_tool_name, arguments or {})
+                
+                api_key = os.getenv('ALPHA_VANTAGE_API_KEY', 'TQS06EXKTHWU639G')
+                async with AlphaVantageMCPClient(api_key) as client:
+                    result = await client.call_tool(real_tool_name, mapped_arguments)
+            else:
+                # Use regular MCP manager for other servers
+                result = await self.mcp_manager.call_tool(
+                    tool_info['server'], 
+                    tool_name, 
+                    arguments or {}
+                )
             
             # Format the result
             if isinstance(result, dict):
                 # Mock session result format
                 if 'content' in result and result['content']:
                     if len(result['content']) == 1:
-                        return str(result['content'][0]['text'])
+                        content = str(result['content'][0]['text'])
                     else:
-                        return "\n".join(str(item['text']) for item in result['content'])
+                        content = "\n".join(str(item['text']) for item in result['content'])
+                    
+                # Truncate large responses to prevent context length issues
+                # Use more aggressive truncation like the Alpha Vantage example
+                if len(content) > 10000:  # Limit to ~10k characters (more conservative)
+                    content = content[:10000] + "\n\n[Data truncated due to size - showing first 10,000 characters]"
+                    
+                    return content
                 elif 'error' in result:
                     return f"Error: {result['error']}"
                 else:
@@ -113,14 +221,50 @@ class MCPAgent:
             elif hasattr(result, 'content') and result.content:
                 # Real MCP session result format
                 if len(result.content) == 1:
-                    return str(result.content[0].text)
+                    content = str(result.content[0].text)
                 else:
-                    return "\n".join(str(item.text) for item in result.content)
+                    content = "\n".join(str(item.text) for item in result.content)
+                
+                # Truncate large responses to prevent context length issues
+                # Use more aggressive truncation like the Alpha Vantage example
+                if len(content) > 10000:  # Limit to ~10k characters (more conservative)
+                    # For time series data, try to extract recent data instead of just truncating
+                    if 'time_series' in tool_name.lower() or 'daily' in tool_name.lower():
+                        content = self._extract_recent_time_series_data(content, 10000)
+                    else:
+                        content = content[:10000] + "\n\n[Data truncated due to size - showing first 10,000 characters]"
+                
+                return content
             else:
                 return f"Tool '{tool_name}' executed successfully but returned no content."
                 
         except Exception as e:
             return f"Error calling tool '{tool_name}': {str(e)}"
+    
+    def _extract_recent_time_series_data(self, content: str, max_length: int) -> str:
+        """Extract recent time series data instead of just truncating from the beginning."""
+        try:
+            # Split by lines to process time series data
+            lines = content.split('\n')
+            
+            # If it looks like CSV data (date,value format), take the most recent entries
+            if len(lines) > 10 and ',' in lines[0]:
+                # Take the last portion of the data (most recent)
+                recent_lines = lines[-50:]  # Take last 50 data points
+                recent_content = '\n'.join(recent_lines)
+                
+                if len(recent_content) <= max_length:
+                    return f"[Showing most recent data points]\n{recent_content}"
+                else:
+                    return recent_content[:max_length] + "\n\n[Data truncated - showing most recent entries]"
+            else:
+                # For other data types, just truncate from the end
+                return content[:max_length] + "\n\n[Data truncated due to size]"
+                
+        except Exception:
+            # Fallback to simple truncation
+            return content[:max_length] + "\n\n[Data truncated due to size]"
+    
     
     async def _execute_tool_calls_from_content(self, content: str, state: Dict[str, Any]) -> str:
         """Execute tool calls based on content analysis."""
@@ -324,6 +468,17 @@ class MCPAgent:
                 content=f"Gathering market data for {ticker} using MCP tools...",
                 tool_calls=tool_calls
             )
+            
+            # Log tool calls for CLI tracking
+            print(f"🔧 MCP Tool Calls: {len(tool_calls)} tools used for {ticker}")
+            for tool in tool_calls:
+                print(f"  - {tool['name']}: {tool['args']}")
+            
+            # Also log to message log for CLI tracking
+            import logging
+            logger = logging.getLogger("mcp_tool_calls")
+            for tool in tool_calls:
+                logger.info(f"MCP Tool Call: {tool['name']} - {tool['args']}")
             
             # Create a new message with tool results
             tool_message = f"Based on the following real market data for {ticker}:\n\n{tool_results}\n\nPlease provide a comprehensive technical analysis report with specific recommendations, price levels, and trading implications."

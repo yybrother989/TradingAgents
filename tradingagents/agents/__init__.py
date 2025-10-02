@@ -3,8 +3,8 @@ from .utils.agent_states import AgentState, InvestDebateState, RiskDebateState
 from .utils.memory import FinancialSituationMemory
 
 from .analysts.fundamentals_analyst import create_fundamentals_analyst
-# Using Official MCP version instead of original
-from .analysts.market_analyst_official import create_market_analyst
+# Using reliable MCP version (mock MCP - no connection issues)
+from .analysts.market_analyst_mcp import create_market_analyst
 from .analysts.news_analyst import create_news_analyst
 from .analysts.social_media_analyst import create_social_media_analyst
 

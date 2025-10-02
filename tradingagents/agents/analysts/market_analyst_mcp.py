@@ -43,9 +43,42 @@ def create_market_analyst_mcp(llm):
         except RuntimeError:
             # Fallback: create new event loop
             result = asyncio.run(mcp_agent.execute_analysis(state, llm, system_message))
+        except Exception as e:
+            print(f"Error in market analyst MCP: {e}")
+            import traceback
+            traceback.print_exc()
+            # Fallback to simple analysis
+            from langchain_core.messages import HumanMessage
+            result = {
+                "messages": [HumanMessage(content="Error in MCP analysis, using fallback")],
+                "analysis_report": "Error occurred during MCP analysis."
+            }
+        
+        # Ensure tool call messages are included for CLI tracking
+        messages = result["messages"]
+        
+        # The first message should contain the tool calls for CLI tracking
+        # This is already handled by the MCP agent base class
+        
+        # Add a debug message to show tool calls are being made
+        from langchain_core.messages import HumanMessage
+        tool_call_count = len([m for m in messages if hasattr(m, 'tool_calls') and m.tool_calls])
+        debug_message = HumanMessage(
+            content=f"🔧 MCP Agent completed analysis with {tool_call_count} tool call messages"
+        )
+        messages.append(debug_message)
+        
+        # Also add individual tool call messages for CLI tracking
+        for i, msg in enumerate(messages):
+            if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                for tool in msg.tool_calls:
+                    tool_msg = HumanMessage(
+                        content=f"🔧 MCP Tool: {tool['name']} - {tool['args']}"
+                    )
+                    messages.append(tool_msg)
         
         return {
-            "messages": result["messages"],
+            "messages": messages,
             "market_report": result["analysis_report"]
         }
     

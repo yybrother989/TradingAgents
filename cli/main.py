@@ -873,6 +873,20 @@ def run_analysis():
                             )
                         else:
                             message_buffer.add_tool_call(tool_call.name, tool_call.args)
+                
+                # Also check for MCP tool call messages
+                if hasattr(last_message, "content") and "MCP Tool:" in str(last_message.content):
+                    # Extract tool name and args from the message content
+                    content = str(last_message.content)
+                    if "MCP Tool:" in content:
+                        # Parse the tool call from the message content
+                        try:
+                            tool_part = content.split("MCP Tool: ")[1]
+                            tool_name = tool_part.split(" - ")[0]
+                            tool_args = tool_part.split(" - ")[1] if " - " in tool_part else "{}"
+                            message_buffer.add_tool_call(tool_name, tool_args)
+                        except:
+                            pass  # Skip if parsing fails
 
                 # Update reports and agent status based on chunk content
                 # Analyst Team Reports

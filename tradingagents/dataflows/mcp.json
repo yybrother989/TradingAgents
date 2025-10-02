@@ -2,7 +2,7 @@
   "servers": {
     "alphavantage": {
       "type": "http",
-      "url": "https://mcp.alphavantage.co/mcp?apikey=YOUR_API_KEY"
+      "url": "https://mcp.alphavantage.co/mcp?apikey=TQS06EXKTHWU639G"
     }
   }
 }
