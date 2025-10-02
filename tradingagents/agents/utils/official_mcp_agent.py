@@ -159,15 +159,27 @@ class OfficialMCPMarketAnalyst:
                 result_streaming = Runner.run_streamed(self.agent, query)
                 
                 # Collect the result
-                result = await result_streaming.get_final_result()
+                result = result_streaming.final_output_as(str)
+                
+                # Ensure we return an AIMessage with proper structure
+                from langchain_core.messages import AIMessage
+                if hasattr(result, 'content'):
+                    # If result is already a message object
+                    ai_message = AIMessage(content=result.content)
+                else:
+                    # If result is a string
+                    ai_message = AIMessage(content=str(result))
+                
                 return {
-                    "messages": [result],
-                    "market_report": result
+                    "messages": [ai_message],
+                    "market_report": ai_message.content
                 }
             except Exception as e:
                 # Fallback result
+                from langchain_core.messages import AIMessage
                 fallback_result = f"Market analysis for {ticker} on {trade_date}: Analysis completed with MCP tools. Error: {str(e)}"
+                ai_message = AIMessage(content=fallback_result)
                 return {
-                    "messages": [fallback_result],
+                    "messages": [ai_message],
                     "market_report": fallback_result
                 }
