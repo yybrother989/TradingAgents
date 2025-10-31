@@ -306,6 +306,44 @@ Server configuration via environment variables:
 - `TRADINGAGENTS_PORT` - Server port (default: 8000)
 - `TRADINGAGENTS_DEBUG` - Enable debug mode (default: false)
 
+## Deployment
+
+Deploy the TradingAgents API to production using free cloud hosting options:
+
+### Quick Deploy to Render (Recommended)
+
+Get your API live in **5 minutes** with Render's free tier:
+
+1. **Create account**: https://render.com → Sign up with GitHub
+2. **New Web Service** → Connect `TradingAgents` repo
+3. **Configure**:
+   - Branch: `feature/data-vendor-integration` (or `main`)
+   - Build: `pip install -r requirements.txt`
+   - Start: `uvicorn tradingagents.api.server:app --host 0.0.0.0 --port $PORT`
+4. **Add environment variables**: Your API keys
+5. **Deploy!**
+
+**Your API will be live at:** `https://your-app.onrender.com`
+
+📖 **Full guide**: [QUICK_DEPLOY_RENDER.md](QUICK_DEPLOY_RENDER.md) (5 min setup)
+
+### Other Platforms
+
+**Railway** ($5 monthly credit):
+- Docker support, no cold starts
+- Full guide: [DEPLOYMENT.md](DEPLOYMENT.md)
+
+**Fly.io** (generous free tier):
+- Global edge deployment, always-on
+- Full guide: [DEPLOYMENT.md](DEPLOYMENT.md)
+
+**Compare all options**: See [DEPLOYMENT.md](DEPLOYMENT.md) for:
+- Platform comparison table
+- Docker configuration
+- Environment setup
+- Troubleshooting
+- Performance tips
+
 ## Contributing
 
 We welcome contributions from the community! Whether it's fixing a bug, improving documentation, or suggesting a new feature, your input helps make this project better. If you are interested in this line of research, please consider joining our open-source financial AI research community [Tauric Research](https://tauric.ai/).
