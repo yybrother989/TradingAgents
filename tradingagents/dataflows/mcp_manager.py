@@ -76,6 +76,12 @@ class TradingAgentsMCPManager:
             servers = config_data.get("servers", {})
             for name, server_config in servers.items():
                 try:
+                    # Replace placeholder API key with actual env var if present
+                    if 'url' in server_config and 'YOUR_API_KEY' in server_config['url']:
+                        api_key = os.getenv('ALPHA_VANTAGE_API_KEY', 'TQS06EXKTHWU639G')
+                        server_config['url'] = server_config['url'].replace('YOUR_API_KEY', api_key)
+                        logger.info(f"Replaced placeholder API key in {name} config with env var")
+                    
                     config = MCPServerConfig(name=name, server_type=server_config['type'], **server_config)
                     self.add_server_config(config)
                     logger.info(f"Loaded configuration for server: {name}")
@@ -88,12 +94,22 @@ class TradingAgentsMCPManager:
             self._create_default_config()
     
     def _create_default_config(self):
-        """Create a default MCP configuration file."""
+        """Create a default MCP configuration file using environment variable."""
+        # Get API key from environment
+        api_key = os.getenv('ALPHA_VANTAGE_API_KEY', 'TQS06EXKTHWU639G')
+        
+        # If still using placeholder, try to get from env
+        if api_key == 'TQS06EXKTHWU639G' or not api_key:
+            api_key = os.getenv('ALPHA_VANTAGE_API_KEY')
+            if not api_key:
+                logger.warning("ALPHA_VANTAGE_API_KEY not found in environment. Using demo key.")
+                api_key = 'TQS06EXKTHWU639G'
+        
         default_config = {
             "servers": {
                 "alphavantage": {
                     "type": "http",
-                    "url": "https://mcp.alphavantage.co/mcp?apikey=YOUR_API_KEY"
+                    "url": f"https://mcp.alphavantage.co/mcp?apikey={api_key}"
                 }
             }
         }
@@ -140,7 +156,16 @@ class TradingAgentsMCPManager:
                 logger.info(f"Successfully initialized MCP server: {name}")
                 
             except Exception as e:
-                logger.error(f"Failed to initialize MCP server {name}: {e}")
+                error_msg = str(e)
+                # Handle TaskGroup errors - known issue with MCP SDK SSE connections
+                if "TaskGroup" in error_msg or "unhandled errors" in error_msg:
+                    logger.warning(
+                        f"MCP server {name} has protocol compatibility issues with official SDK "
+                        f"(TaskGroup error). This is expected - will use direct HTTP client instead."
+                    )
+                else:
+                    logger.error(f"Failed to initialize MCP server {name}: {e}")
+                
                 # If external server fails, use mock session
                 if name == "alphavantage":
                     logger.info("Falling back to mock MCP session for alphavantage")

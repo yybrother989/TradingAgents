@@ -1114,9 +1114,21 @@ def run_analysis():
         update_display(layout)
 
 
-@app.command()
-def analyze():
+@app.command("analyze")
+def analyze_legacy():
+    """Legacy analyze command - runs full graph workflow."""
     run_analysis()
+
+
+@app.command("analyze-new")
+def analyze_new(
+    ticker: str = typer.Option(..., "--ticker", "-t", help="Stock ticker symbol"),
+    date: Optional[str] = typer.Option(None, "--date", "-d", help="Analysis date (YYYY-MM-DD)"),
+    agents: Optional[str] = typer.Option(None, "--agents", "-a", help="Comma-separated agents or 'all'"),
+):
+    """New independent agent execution mode."""
+    from cli.agent_cli import run as run_agents
+    run_agents(ticker=ticker, date=date, agents=agents)
 
 
 if __name__ == "__main__":

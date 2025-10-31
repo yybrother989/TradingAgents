@@ -2,11 +2,11 @@ from .utils.agent_utils import create_msg_delete
 from .utils.agent_states import AgentState, InvestDebateState, RiskDebateState
 from .utils.memory import FinancialSituationMemory
 
-from .analysts.fundamentals_analyst import create_fundamentals_analyst
-# Using reliable MCP version (mock MCP - no connection issues)
+# All analysts now use MCP (Alpha Vantage MCP integration)
 from .analysts.market_analyst_mcp import create_market_analyst
 from .analysts.news_analyst import create_news_analyst
 from .analysts.social_media_analyst import create_social_media_analyst
+from .analysts.fundamentals_analyst import create_fundamentals_analyst
 
 from .researchers.bear_researcher import create_bear_researcher
 from .researchers.bull_researcher import create_bull_researcher

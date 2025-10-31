@@ -229,6 +229,83 @@ The MCP integration is automatically enabled as the default data provider. The M
 
 You can view the full list of configurations in `tradingagents/default_config.py`.
 
+## REST API Server
+
+TradingAgents now includes a REST API server for programmatic access to the trading analysis framework.
+
+### Starting the Server
+
+```bash
+# Using the provided script
+python server.py
+
+# Or using uvicorn directly
+uvicorn tradingagents.api.server:app --host 0.0.0.0 --port 8000
+```
+
+### API Endpoints
+
+- **POST `/api/v1/analyze`** - Run analyst agents and return their reports
+  - Request: `{"ticker": "AAPL", "date": "2024-05-10", "config": {...}}`
+  - Response: **Analyst reports only** (Market, News, Social, Fundamentals)
+  - Note: Trading decisions, researcher outputs, and risk manager outputs are excluded
+
+- **POST `/api/v1/agents/run`** - Run selected analyst agents independently
+  - Request: `{"ticker": "AAPL", "date": "2024-05-10", "agents": ["market_analyst", "news_analyst"], "config": {...}}`
+  - Response: Reports from selected analyst agents
+  - Valid agents: `market_analyst`, `news_analyst`, `social_analyst`, `fundamentals_analyst`
+  - If no agents specified, all analysts run by default
+
+- **GET `/api/v1/health`** - Health check
+  - Response: `{"status": "ok", "version": "1.0.0"}`
+
+- **GET `/api/v1/config`** - Get current configuration
+  - Response: Current configuration dictionary
+
+- **POST `/api/v1/config`** - Update configuration
+  - Request: `{"config": {...}}`
+  - Response: Updated configuration
+
+- **GET `/api/v1/analyses/{ticker}/{date}`** - Get cached analyst reports
+  - Response: Cached analyst reports if available (only analyst outputs, no trading decisions)
+
+### API Documentation
+
+Once the server is running, visit `http://localhost:8000/docs` for interactive API documentation (Swagger UI) or `http://localhost:8000/redoc` for ReDoc documentation.
+
+### Frontend Integration
+
+For detailed instructions on connecting your frontend application to the TradingAgents Analyst API, see **[FRONTEND_INTEGRATION.md](FRONTEND_INTEGRATION.md)**.
+
+The guide includes:
+- Complete API endpoint documentation
+- TypeScript type definitions
+- Examples for React, Vue, Next.js, and vanilla JavaScript
+- Error handling patterns
+- Best practices and production setup
+
+### Example Usage
+
+```bash
+# Run analysis via API
+curl -X POST "http://localhost:8000/api/v1/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{"ticker": "NVDA", "date": "2024-05-10"}'
+
+# Check health
+curl http://localhost:8000/api/v1/health
+
+# Get configuration
+curl http://localhost:8000/api/v1/config
+```
+
+### Configuration
+
+Server configuration via environment variables:
+- `TRADINGAGENTS_HOST` - Server host (default: 0.0.0.0)
+- `TRADINGAGENTS_PORT` - Server port (default: 8000)
+- `TRADINGAGENTS_DEBUG` - Enable debug mode (default: false)
+
 ## Contributing
 
 We welcome contributions from the community! Whether it's fixing a bug, improving documentation, or suggesting a new feature, your input helps make this project better. If you are interested in this line of research, please consider joining our open-source financial AI research community [Tauric Research](https://tauric.ai/).

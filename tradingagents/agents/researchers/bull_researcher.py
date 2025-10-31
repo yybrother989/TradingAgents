@@ -1,46 +1,77 @@
 from langchain_core.messages import AIMessage
 import time
 import json
+import asyncio
+from typing import Dict, Any
+from tradingagents.agents.utils.mcp_agent_base import MCPAgent
 
 
 def create_bull_researcher(llm, memory):
+    """Create a bull researcher that uses MCP tools for data retrieval."""
+    
+    # Initialize MCP agent for research data
+    mcp_agent = MCPAgent(
+        agent_name="Bull Researcher",
+        mcp_servers=["alphavantage"]
+    )
+    
     def bull_node(state) -> dict:
         investment_debate_state = state["investment_debate_state"]
         history = investment_debate_state.get("history", "")
         bull_history = investment_debate_state.get("bull_history", "")
 
         current_response = investment_debate_state.get("current_response", "")
-        market_research_report = state["market_report"]
-        sentiment_report = state["sentiment_report"]
-        news_report = state["news_report"]
-        fundamentals_report = state["fundamentals_report"]
-
-        curr_situation = f"{market_research_report}\n\n{sentiment_report}\n\n{news_report}\n\n{fundamentals_report}"
+        ticker = state.get("company_of_interest", "AAPL")
+        
+        # Get research data via MCP tools instead of from state
+        try:
+            # Try to run in existing event loop
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # We're in an async context, create a task
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run, 
+                        mcp_agent.get_research_data(ticker, state.get("trade_date"))
+                    )
+                    research_data = future.result()
+            else:
+                # No running loop, safe to use asyncio.run
+                research_data = asyncio.run(mcp_agent.get_research_data(ticker, state.get("trade_date")))
+        except RuntimeError:
+            # Fallback: create new event loop
+            research_data = asyncio.run(mcp_agent.get_research_data(ticker, state.get("trade_date")))
+        except Exception as e:
+            print(f"Warning: Failed to get MCP research data for bull researcher: {e}")
+            # Fallback to state data if MCP fails
+            research_data = {
+                "market_data": state.get("market_report", ""),
+                "news_data": state.get("news_report", ""),
+                "fundamentals_data": state.get("fundamentals_report", ""),
+                "sentiment_data": state.get("sentiment_report", "")
+            }
+        
+        # Create situation string for memory lookup
+        curr_situation = f"{research_data['market_data']}\n\n{research_data['sentiment_data']}\n\n{research_data['news_data']}\n\n{research_data['fundamentals_data']}"
         past_memories = memory.get_memories(curr_situation, n_matches=2)
 
         past_memory_str = ""
         for i, rec in enumerate(past_memories, 1):
             past_memory_str += rec["recommendation"] + "\n\n"
 
-        prompt = f"""You are a Bull Analyst advocating for investing in the stock. Your task is to build a strong, evidence-based case emphasizing growth potential, competitive advantages, and positive market indicators. Leverage the provided research and data to address concerns and counter bearish arguments effectively.
+        # Simplified prompt - no data previews to keep prompt short
+        prompt = f"""You are a Bull Analyst advocating for investing in {ticker}. Build a strong case emphasizing growth potential, competitive advantages, and positive indicators.
 
-Key points to focus on:
-- Growth Potential: Highlight the company's market opportunities, revenue projections, and scalability.
-- Competitive Advantages: Emphasize factors like unique products, strong branding, or dominant market positioning.
-- Positive Indicators: Use financial health, industry trends, and recent positive news as evidence.
-- Bear Counterpoints: Critically analyze the bear argument with specific data and sound reasoning, addressing concerns thoroughly and showing why the bull perspective holds stronger merit.
-- Engagement: Present your argument in a conversational style, engaging directly with the bear analyst's points and debating effectively rather than just listing data.
+CRITICAL: First, use MCP tools (get_time_series_daily, get_news_sentiment, get_company_overview) to fetch current data for {ticker}. Then make your argument based on the data you retrieve.
 
-Resources available:
-Market research report: {market_research_report}
-Social media sentiment report: {sentiment_report}
-Latest world affairs news: {news_report}
-Company fundamentals report: {fundamentals_report}
-Conversation history of the debate: {history}
-Last bear argument: {current_response}
-Reflections from similar situations and lessons learned: {past_memory_str}
-Use this information to deliver a compelling bull argument, refute the bear's concerns, and engage in a dynamic debate that demonstrates the strengths of the bull position. You must also address reflections and learn from lessons and mistakes you made in the past.
-"""
+Focus: Growth opportunities, competitive advantages, positive indicators, bear counterpoints.
+
+History: {history[:500] if len(history) > 500 else history}
+Bear argument: {current_response[:500] if len(current_response) > 500 else current_response}
+Past lessons: {past_memory_str[:300] if len(past_memory_str) > 300 else past_memory_str}
+
+Provide a compelling bull argument based on real data from MCP tools. Keep response concise."""
 
         response = llm.invoke(prompt)
 

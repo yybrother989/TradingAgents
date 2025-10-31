@@ -17,14 +17,18 @@ def create_market_analyst_mcp(llm):
     def market_analyst_node(state: Dict[str, Any]) -> Dict[str, Any]:
         """Market analyst node using MCP tools."""
         
-        # Simplified system message focused on analysis rather than tool usage
+        # Get analysis date from state
+        analysis_date = state.get("trade_date", "N/A")
+        
+        # Create system message with date context
         system_message = (
-            "You are a financial market analyst specializing in technical analysis. "
-            "Your role is to analyze market trends and provide actionable insights for trading decisions. "
-            "Use the available MCP tools to gather real-time market data and technical indicators. "
-            "Focus on identifying key trends, support/resistance levels, momentum shifts, and volatility patterns. "
-            "Provide detailed analysis with specific price levels, trend directions, and trading implications. "
-            "End your analysis with a clear summary table of key findings."
+            f"You are a financial market analyst specializing in technical analysis. "
+            f"Your role is to analyze market trends and provide actionable insights for trading decisions as of {analysis_date}. "
+            f"IMPORTANT: This analysis is for the date {analysis_date}. When interpreting the data, consider this as the reference date. "
+            f"Use the available MCP tools to gather market data and technical indicators. "
+            f"Focus on identifying key trends, support/resistance levels, momentum shifts, and volatility patterns as they existed on {analysis_date}. "
+            f"Provide detailed analysis with specific price levels, trend directions, and trading implications relevant to {analysis_date}. "
+            f"End your analysis with a clear summary table of key findings, and include the analysis date ({analysis_date}) in your report."
         )
         
         # Execute analysis using MCP tools

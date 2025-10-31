@@ -1,58 +1,76 @@
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-import time
-import json
-from tradingagents.agents.utils.agent_utils import get_news, get_global_news
-from tradingagents.dataflows.config import get_config
+"""MCP-enabled News Analyst for TradingAgents."""
+
+import asyncio
+from typing import Dict, Any
+from tradingagents.agents.utils.mcp_agent_base import MCPAgent
 
 
 def create_news_analyst(llm):
-    def news_analyst_node(state):
-        current_date = state["trade_date"]
-        ticker = state["company_of_interest"]
-
-        tools = [
-            get_news,
-            get_global_news,
-        ]
-
+    """Create an MCP-enabled news analyst."""
+    
+    # Initialize MCP agent
+    mcp_agent = MCPAgent(
+        agent_name="News Analyst",
+        mcp_servers=["alphavantage"]
+    )
+    
+    def news_analyst_node(state: Dict[str, Any]) -> Dict[str, Any]:
+        """News analyst node using MCP tools."""
+        
+        # Get analysis date from state
+        analysis_date = state.get("trade_date", "N/A")
+        ticker = state.get("company_of_interest", "N/A")
+        
+        # Create system message with date context
         system_message = (
-            "You are a news researcher tasked with analyzing recent news and trends over the past week. Please write a comprehensive report of the current state of the world that is relevant for trading and macroeconomics. Use the available tools: get_news(query, start_date, end_date) for company-specific or targeted news searches, and get_global_news(curr_date, look_back_days, limit) for broader macroeconomic news. Do not simply state the trends are mixed, provide detailed and finegrained analysis and insights that may help traders make decisions."
-            + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
+            f"You are a news researcher and macroeconomics analyst specializing in financial markets. "
+            f"Your role is to analyze recent news and global economic trends relevant to trading and investment decisions as of {analysis_date}. "
+            f"IMPORTANT: This analysis is for the date {analysis_date}. When examining news, interpret it in the context of what was known or available up to {analysis_date}. "
+            f"Use the available MCP tools (NEWS_SENTIMENT) to gather news data for the company {ticker}. "
+            f"Focus on: "
+            f"- Company-specific news and sentiment trends "
+            f"- Macroeconomic news that impacts the broader market "
+            f"- Market-moving events and their implications "
+            f"- Sentiment analysis from news sources "
+            f"Provide detailed analysis with specific insights, implications for traders, and a clear summary table. "
+            f"Include the analysis date ({analysis_date}) prominently in your report."
         )
-
-        prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    "You are a helpful AI assistant, collaborating with other assistants."
-                    " Use the provided tools to progress towards answering the question."
-                    " If you are unable to fully answer, that's OK; another assistant with different tools"
-                    " will help where you left off. Execute what you can to make progress."
-                    " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"
-                    " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
-                    " You have access to the following tools: {tool_names}.\n{system_message}"
-                    "For your reference, the current date is {current_date}. We are looking at the company {ticker}",
-                ),
-                MessagesPlaceholder(variable_name="messages"),
-            ]
-        )
-
-        prompt = prompt.partial(system_message=system_message)
-        prompt = prompt.partial(tool_names=", ".join([tool.name for tool in tools]))
-        prompt = prompt.partial(current_date=current_date)
-        prompt = prompt.partial(ticker=ticker)
-
-        chain = prompt | llm.bind_tools(tools)
-        result = chain.invoke(state["messages"])
-
-        report = ""
-
-        if len(result.tool_calls) == 0:
-            report = result.content
-
+        
+        # Execute analysis using MCP tools
+        try:
+            # Try to run in existing event loop
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # We're in an async context, create a task
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, mcp_agent.execute_analysis(state, llm, system_message))
+                    result = future.result()
+            else:
+                # No running loop, safe to use asyncio.run
+                result = asyncio.run(mcp_agent.execute_analysis(state, llm, system_message))
+        except RuntimeError:
+            # Fallback: create new event loop
+            result = asyncio.run(mcp_agent.execute_analysis(state, llm, system_message))
+        except Exception as e:
+            print(f"Error in news analyst MCP: {e}")
+            import traceback
+            traceback.print_exc()
+            # Fallback to simple analysis
+            from langchain_core.messages import HumanMessage
+            result = {
+                "messages": [HumanMessage(content="Error in MCP analysis, using fallback")],
+                "news_report": "Error occurred during MCP news analysis."
+            }
+        
+        # Ensure tool call messages are included for CLI tracking
+        messages = result["messages"]
+        
         return {
-            "messages": [result],
-            "news_report": report,
+            "messages": messages,
+            "news_report": result["analysis_report"]
         }
-
+    
+    # Store mcp_agent for potential direct access
+    news_analyst_node._mcp_agent = mcp_agent
     return news_analyst_node
