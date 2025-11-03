@@ -1,8 +1,18 @@
 import time
 import json
+import asyncio
+from tradingagents.agents.utils.mcp_agent_base import MCPAgent
 
 
 def create_neutral_debator(llm):
+    """Create a neutral debator that uses MCP tools for current market data."""
+    
+    # Initialize MCP agent
+    mcp_agent = MCPAgent(
+        agent_name="Neutral Risk Analyst",
+        mcp_servers=["alphavantage"]
+    )
+    
     def neutral_node(state) -> dict:
         risk_debate_state = state["risk_debate_state"]
         history = risk_debate_state.get("history", "")
@@ -11,26 +21,47 @@ def create_neutral_debator(llm):
         current_risky_response = risk_debate_state.get("current_risky_response", "")
         current_safe_response = risk_debate_state.get("current_safe_response", "")
 
-        market_research_report = state["market_report"]
-        sentiment_report = state["sentiment_report"]
-        news_report = state["news_report"]
-        fundamentals_report = state["fundamentals_report"]
-
         trader_decision = state["trader_investment_plan"]
+        ticker = state.get("company_of_interest", "AAPL")
+        
+        # Get current market data via MCP tools
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run,
+                        mcp_agent.get_research_data(ticker, state.get("trade_date"))
+                    )
+                    research_data = future.result()
+            else:
+                research_data = asyncio.run(mcp_agent.get_research_data(ticker, state.get("trade_date")))
+        except RuntimeError:
+            research_data = asyncio.run(mcp_agent.get_research_data(ticker, state.get("trade_date")))
+        except Exception as e:
+            print(f"Warning: Failed to get MCP data for neutral debator: {e}")
+            # Fallback to state data
+            research_data = {
+                "market_data": state.get("market_report", ""),
+                "news_data": state.get("news_report", ""),
+                "fundamentals_data": state.get("fundamentals_report", ""),
+                "sentiment_data": state.get("sentiment_report", "")
+            }
 
-        prompt = f"""As the Neutral Risk Analyst, your role is to provide a balanced perspective, weighing both the potential benefits and risks of the trader's decision or plan. You prioritize a well-rounded approach, evaluating the upsides and downsides while factoring in broader market trends, potential economic shifts, and diversification strategies.Here is the trader's decision:
+        prompt = f"""As the Neutral Risk Analyst, provide balanced perspective weighing benefits and risks. Prioritize well-rounded approach evaluating upsides and downsides.
 
-{trader_decision}
+CRITICAL: Use MCP tools (get_time_series_daily, get_news_sentiment, get_company_overview) to fetch current data for {ticker} before arguing.
 
-Your task is to challenge both the Risky and Safe Analysts, pointing out where each perspective may be overly optimistic or overly cautious. Use insights from the following data sources to support a moderate, sustainable strategy to adjust the trader's decision:
+Trader's decision: {trader_decision[:500] if len(trader_decision) > 500 else trader_decision}
 
-Market Research Report: {market_research_report}
-Social Media Sentiment Report: {sentiment_report}
-Latest World Affairs Report: {news_report}
-Company Fundamentals Report: {fundamentals_report}
-Here is the current conversation history: {history} Here is the last response from the risky analyst: {current_risky_response} Here is the last response from the safe analyst: {current_safe_response}. If there are no responses from the other viewpoints, do not halluncinate and just present your point.
+Task: Challenge both Risky and Safe Analysts, point out where each is overly optimistic or cautious. Use real data from MCP tools to support moderate strategy.
 
-Engage actively by analyzing both sides critically, addressing weaknesses in the risky and conservative arguments to advocate for a more balanced approach. Challenge each of their points to illustrate why a moderate risk strategy might offer the best of both worlds, providing growth potential while safeguarding against extreme volatility. Focus on debating rather than simply presenting data, aiming to show that a balanced view can lead to the most reliable outcomes. Output conversationally as if you are speaking without any special formatting."""
+Conversation: {history[:400] if len(history) > 400 else history}
+Risky: {current_risky_response[:300] if len(current_risky_response) > 300 else current_risky_response}
+Safe: {current_safe_response[:300] if len(current_safe_response) > 300 else current_safe_response}
+
+If no responses from others, just present your point. Analyze both sides critically, show why moderate risk offers best of both worlds. Keep response concise."""
 
         response = llm.invoke(prompt)
 

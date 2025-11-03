@@ -1,8 +1,18 @@
 import time
 import json
+import asyncio
+from tradingagents.agents.utils.mcp_agent_base import MCPAgent
 
 
 def create_risky_debator(llm):
+    """Create a risky debator that uses MCP tools for current market data."""
+    
+    # Initialize MCP agent
+    mcp_agent = MCPAgent(
+        agent_name="Risky Risk Analyst",
+        mcp_servers=["alphavantage"]
+    )
+    
     def risky_node(state) -> dict:
         risk_debate_state = state["risk_debate_state"]
         history = risk_debate_state.get("history", "")
@@ -11,26 +21,47 @@ def create_risky_debator(llm):
         current_safe_response = risk_debate_state.get("current_safe_response", "")
         current_neutral_response = risk_debate_state.get("current_neutral_response", "")
 
-        market_research_report = state["market_report"]
-        sentiment_report = state["sentiment_report"]
-        news_report = state["news_report"]
-        fundamentals_report = state["fundamentals_report"]
-
         trader_decision = state["trader_investment_plan"]
+        ticker = state.get("company_of_interest", "AAPL")
+        
+        # Get current market data via MCP tools
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run,
+                        mcp_agent.get_research_data(ticker, state.get("trade_date"))
+                    )
+                    research_data = future.result()
+            else:
+                research_data = asyncio.run(mcp_agent.get_research_data(ticker, state.get("trade_date")))
+        except RuntimeError:
+            research_data = asyncio.run(mcp_agent.get_research_data(ticker, state.get("trade_date")))
+        except Exception as e:
+            print(f"Warning: Failed to get MCP data for risky debator: {e}")
+            # Fallback to state data
+            research_data = {
+                "market_data": state.get("market_report", ""),
+                "news_data": state.get("news_report", ""),
+                "fundamentals_data": state.get("fundamentals_report", ""),
+                "sentiment_data": state.get("sentiment_report", "")
+            }
 
-        prompt = f"""As the Risky Risk Analyst, your role is to actively champion high-reward, high-risk opportunities, emphasizing bold strategies and competitive advantages. When evaluating the trader's decision or plan, focus intently on the potential upside, growth potential, and innovative benefits—even when these come with elevated risk. Use the provided market data and sentiment analysis to strengthen your arguments and challenge the opposing views. Specifically, respond directly to each point made by the conservative and neutral analysts, countering with data-driven rebuttals and persuasive reasoning. Highlight where their caution might miss critical opportunities or where their assumptions may be overly conservative. Here is the trader's decision:
+        prompt = f"""As the Risky Risk Analyst, champion high-reward, high-risk opportunities with bold strategies. Focus on upside potential, growth, and innovation benefits.
 
-{trader_decision}
+CRITICAL: Use MCP tools (get_time_series_daily, get_news_sentiment, get_company_overview) to fetch current data for {ticker} before arguing.
 
-Your task is to create a compelling case for the trader's decision by questioning and critiquing the conservative and neutral stances to demonstrate why your high-reward perspective offers the best path forward. Incorporate insights from the following sources into your arguments:
+Trader's decision: {trader_decision[:500] if len(trader_decision) > 500 else trader_decision}
 
-Market Research Report: {market_research_report}
-Social Media Sentiment Report: {sentiment_report}
-Latest World Affairs Report: {news_report}
-Company Fundamentals Report: {fundamentals_report}
-Here is the current conversation history: {history} Here are the last arguments from the conservative analyst: {current_safe_response} Here are the last arguments from the neutral analyst: {current_neutral_response}. If there are no responses from the other viewpoints, do not halluncinate and just present your point.
+Task: Create a compelling case for the trader's decision by questioning conservative and neutral stances. Use real data from MCP tools to show why high-reward perspective offers the best path.
 
-Engage actively by addressing any specific concerns raised, refuting the weaknesses in their logic, and asserting the benefits of risk-taking to outpace market norms. Maintain a focus on debating and persuading, not just presenting data. Challenge each counterpoint to underscore why a high-risk approach is optimal. Output conversationally as if you are speaking without any special formatting."""
+Conversation: {history[:400] if len(history) > 400 else history}
+Conservative: {current_safe_response[:300] if len(current_safe_response) > 300 else current_safe_response}
+Neutral: {current_neutral_response[:300] if len(current_neutral_response) > 300 else current_neutral_response}
+
+If no responses from others, just present your point. Engage actively, refute concerns with data, and assert benefits of risk-taking. Keep response concise."""
 
         response = llm.invoke(prompt)
 

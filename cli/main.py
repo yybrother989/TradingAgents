@@ -4,6 +4,10 @@ import typer
 from pathlib import Path
 from functools import wraps
 from rich.console import Console
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.live import Live
@@ -869,6 +873,20 @@ def run_analysis():
                             )
                         else:
                             message_buffer.add_tool_call(tool_call.name, tool_call.args)
+                
+                # Also check for MCP tool call messages
+                if hasattr(last_message, "content") and "MCP Tool:" in str(last_message.content):
+                    # Extract tool name and args from the message content
+                    content = str(last_message.content)
+                    if "MCP Tool:" in content:
+                        # Parse the tool call from the message content
+                        try:
+                            tool_part = content.split("MCP Tool: ")[1]
+                            tool_name = tool_part.split(" - ")[0]
+                            tool_args = tool_part.split(" - ")[1] if " - " in tool_part else "{}"
+                            message_buffer.add_tool_call(tool_name, tool_args)
+                        except:
+                            pass  # Skip if parsing fails
 
                 # Update reports and agent status based on chunk content
                 # Analyst Team Reports
@@ -1096,9 +1114,21 @@ def run_analysis():
         update_display(layout)
 
 
-@app.command()
-def analyze():
+@app.command("analyze")
+def analyze_legacy():
+    """Legacy analyze command - runs full graph workflow."""
     run_analysis()
+
+
+@app.command("analyze-new")
+def analyze_new(
+    ticker: str = typer.Option(..., "--ticker", "-t", help="Stock ticker symbol"),
+    date: Optional[str] = typer.Option(None, "--date", "-d", help="Analysis date (YYYY-MM-DD)"),
+    agents: Optional[str] = typer.Option(None, "--agents", "-a", help="Comma-separated agents or 'all'"),
+):
+    """New independent agent execution mode."""
+    from cli.agent_cli import run as run_agents
+    run_agents(ticker=ticker, date=date, agents=agents)
 
 
 if __name__ == "__main__":

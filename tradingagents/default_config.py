@@ -17,6 +17,17 @@ DEFAULT_CONFIG = {
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,
     "max_recur_limit": 100,
-    # Tool settings
-    "online_tools": True,
+    # Data vendor configuration
+    # Category-level configuration (default for all tools in category)
+    "data_vendors": {
+        "core_stock_apis": "alpha_vantage_mcp",        # OHLCV data: alpha_vantage, alpha_vantage_mcp, yahoo_finance, local
+        "technical_indicators": "alpha_vantage_mcp",   # Technical indicators: alpha_vantage, alpha_vantage_mcp, yahoo_finance, local
+        "fundamental_data": "alpha_vantage_mcp",       # Fundamentals: alpha_vantage, alpha_vantage_mcp, openai, local
+        "news_data": "alpha_vantage_mcp",              # News: alpha_vantage, alpha_vantage_mcp, openai, google, local
+    },
+    # Tool-level configuration (takes precedence over category-level)
+    "tool_vendors": {
+        # Example: "get_stock_data": "alpha_vantage",  # Override category default
+        # Example: "get_news": "openai",               # Override category default
+    },
 }

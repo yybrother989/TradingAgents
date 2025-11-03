@@ -114,14 +114,20 @@ pip install -r requirements.txt
 
 ### Required APIs
 
-You will also need the FinnHub API for financial data. All of our code is implemented with the free tier.
+You will also need the [Alpha Vantage API](https://www.alphavantage.co/support/#api-key) for financial data. The free tier supports 25 API calls per day.
 ```bash
-export FINNHUB_API_KEY=$YOUR_FINNHUB_API_KEY
+export ALPHA_VANTAGE_API_KEY=$YOUR_ALPHA_VANTAGE_API_KEY
 ```
 
 You will need the OpenAI API for all the agents.
 ```bash
 export OPENAI_API_KEY=$YOUR_OPENAI_API_KEY
+```
+
+Alternatively, you can create a `.env` file in the project root with your API keys (see `.env.example` for reference):
+```bash
+cp .env.example .env
+# Edit .env with your actual API keys
 ```
 
 ### CLI Usage
@@ -178,7 +184,14 @@ config = DEFAULT_CONFIG.copy()
 config["deep_think_llm"] = "gpt-4.1-nano"  # Use a different model
 config["quick_think_llm"] = "gpt-4.1-nano"  # Use a different model
 config["max_debate_rounds"] = 1  # Increase debate rounds
-config["online_tools"] = True # Use online tools or cached data
+
+# Configure data vendors (default uses Alpha Vantage for real-time data)
+config["data_vendors"] = {
+    "core_stock_apis": "alpha_vantage",      # Options: alpha_vantage, yahoo_finance, local
+    "technical_indicators": "alpha_vantage", # Options: alpha_vantage, yahoo_finance, local
+    "fundamental_data": "alpha_vantage",     # Options: alpha_vantage, openai, local
+    "news_data": "alpha_vantage",            # Options: alpha_vantage, openai, google, local
+}
 
 # Initialize with custom config
 ta = TradingAgentsGraph(debug=True, config=config)
@@ -188,9 +201,148 @@ _, decision = ta.propagate("NVDA", "2024-05-10")
 print(decision)
 ```
 
-> For `online_tools`, we recommend enabling them for experimentation, as they provide access to real-time data. The agents' offline tools rely on cached data from our **Tauric TradingDB**, a curated dataset we use for backtesting. We're currently in the process of refining this dataset, and we plan to release it soon alongside our upcoming projects. Stay tuned!
+> The default configuration now uses Alpha Vantage as the primary data provider, which provides access to real-time market data. For offline experimentation, there's a local data vendor option that uses our **Tauric TradingDB**, a curated dataset for backtesting, though this is still in development. We're currently refining this dataset and plan to release it soon alongside our upcoming projects. Stay tuned!
+
+### Alpha Vantage MCP Integration
+
+TradingAgents now features **Model Context Protocol (MCP)** integration with Alpha Vantage, providing enhanced real-time data access and improved reliability. The MCP integration offers:
+
+- **Real-time data streaming** via HTTP/SSE connections
+- **Enhanced error handling** and connection management
+- **Better performance** with optimized data retrieval
+- **Seamless integration** with existing agent workflows
+- **Dynamic tool discovery** for flexible data access
+
+#### Setup MCP Integration
+
+1. **Install dependencies** (already included in requirements):
+   ```bash
+   pip install mcp>=1.9.4
+   ```
+
+2. **Configure Alpha Vantage API key**:
+   ```bash
+   python setup_mcp.py
+   ```
+
+The MCP integration is automatically enabled as the default data provider. The Market Analyst now uses MCP tools for real-time data retrieval, providing more accurate and up-to-date market analysis.
 
 You can view the full list of configurations in `tradingagents/default_config.py`.
+
+## REST API Server
+
+TradingAgents now includes a REST API server for programmatic access to the trading analysis framework.
+
+### Starting the Server
+
+```bash
+# Using the provided script
+python server.py
+
+# Or using uvicorn directly
+uvicorn tradingagents.api.server:app --host 0.0.0.0 --port 8000
+```
+
+### API Endpoints
+
+- **POST `/api/v1/analyze`** - Run analyst agents and return their reports
+  - Request: `{"ticker": "AAPL", "date": "2024-05-10", "config": {...}}`
+  - Response: **Analyst reports only** (Market, News, Social, Fundamentals)
+  - Note: Trading decisions, researcher outputs, and risk manager outputs are excluded
+
+- **POST `/api/v1/agents/run`** - Run selected analyst agents independently
+  - Request: `{"ticker": "AAPL", "date": "2024-05-10", "agents": ["market_analyst", "news_analyst"], "config": {...}}`
+  - Response: Reports from selected analyst agents
+  - Valid agents: `market_analyst`, `news_analyst`, `social_analyst`, `fundamentals_analyst`
+  - If no agents specified, all analysts run by default
+
+- **GET `/api/v1/health`** - Health check
+  - Response: `{"status": "ok", "version": "1.0.0"}`
+
+- **GET `/api/v1/config`** - Get current configuration
+  - Response: Current configuration dictionary
+
+- **POST `/api/v1/config`** - Update configuration
+  - Request: `{"config": {...}}`
+  - Response: Updated configuration
+
+- **GET `/api/v1/analyses/{ticker}/{date}`** - Get cached analyst reports
+  - Response: Cached analyst reports if available (only analyst outputs, no trading decisions)
+
+### API Documentation
+
+Once the server is running, visit `http://localhost:8000/docs` for interactive API documentation (Swagger UI) or `http://localhost:8000/redoc` for ReDoc documentation.
+
+### Frontend Integration
+
+For detailed instructions on connecting your frontend application to the TradingAgents Analyst API, see **[FRONTEND_INTEGRATION.md](FRONTEND_INTEGRATION.md)**.
+
+The guide includes:
+- Complete API endpoint documentation
+- TypeScript type definitions
+- Examples for React, Vue, Next.js, and vanilla JavaScript
+- Error handling patterns
+- Best practices and production setup
+
+### Example Usage
+
+```bash
+# Run analysis via API
+curl -X POST "http://localhost:8000/api/v1/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{"ticker": "NVDA", "date": "2024-05-10"}'
+
+# Check health
+curl http://localhost:8000/api/v1/health
+
+# Get configuration
+curl http://localhost:8000/api/v1/config
+```
+
+### Configuration
+
+Server configuration via environment variables:
+- `TRADINGAGENTS_HOST` - Server host (default: 0.0.0.0)
+- `TRADINGAGENTS_PORT` - Server port (default: 8000)
+- `TRADINGAGENTS_DEBUG` - Enable debug mode (default: false)
+
+## Deployment
+
+Deploy the TradingAgents API to production using free cloud hosting options:
+
+### Quick Deploy to Render (Recommended)
+
+Get your API live in **5 minutes** with Render's free tier:
+
+1. **Create account**: https://render.com → Sign up with GitHub
+2. **New Web Service** → Connect `TradingAgents` repo
+3. **Configure**:
+   - Branch: `feature/data-vendor-integration` (or `main`)
+   - Build: `pip install -r requirements.txt`
+   - Start: `uvicorn tradingagents.api.server:app --host 0.0.0.0 --port $PORT`
+4. **Add environment variables**: Your API keys
+5. **Deploy!**
+
+**Your API will be live at:** `https://your-app.onrender.com`
+
+📖 **Full guide**: [QUICK_DEPLOY_RENDER.md](QUICK_DEPLOY_RENDER.md) (5 min setup)
+
+### Other Platforms
+
+**Railway** ($5 monthly credit):
+- Docker support, no cold starts
+- Full guide: [DEPLOYMENT.md](DEPLOYMENT.md)
+
+**Fly.io** (generous free tier):
+- Global edge deployment, always-on
+- Full guide: [DEPLOYMENT.md](DEPLOYMENT.md)
+
+**Compare all options**: See [DEPLOYMENT.md](DEPLOYMENT.md) for:
+- Platform comparison table
+- Docker configuration
+- Environment setup
+- Troubleshooting
+- Performance tips
 
 ## Contributing
 
